@@ -1,0 +1,317 @@
+git init
+git remote add origin https://github.com/your-username/pas-dashboard.git
+git add .
+git commit -m "Initial commit"
+git push -u origin main
+
+import React, { useState, useEffect } from 'react';
+
+const MultiBrandDashboard = () => {
+  // Initial brands data with default values
+  const initialBrands = Array(30).fill().map((_, index) => ({
+    id: index + 1,
+    name: `Brand ${index + 1}`,
+    results: 'Fair',
+    clientSentiment: 'Fair',
+    communication: 'Fair',
+    score: 0,
+    condition: ''
+  }));
+
+  // Load saved data from localStorage if available
+  const loadSavedData = () => {
+    try {
+      const savedBrands = localStorage.getItem('pasBrands');
+      const savedNextId = localStorage.getItem('pasNextId');
+      
+      if (savedBrands) {
+        return {
+          brands: JSON.parse(savedBrands),
+          nextId: savedNextId ? parseInt(savedNextId) : 31
+        };
+      }
+    } catch (error) {
+      console.error("Error loading saved data:", error);
+    }
+    
+    return {
+      brands: initialBrands,
+      nextId: 31
+    };
+  };
+
+  const { brands: initialLoadedBrands, nextId: initialNextId } = loadSavedData();
+  
+  const [brands, setBrands] = useState(initialLoadedBrands);
+  const [newBrandName, setNewBrandName] = useState('');
+  const [nextId, setNextId] = useState(initialNextId);
+
+  // Options for each factor
+  const options = ['Poor', 'Fair', 'Good'];
+  
+  // Scoring values for each option
+  const optionScores = {
+    Poor: 0,
+    Fair: 50,
+    Good: 100
+  };
+
+  // Weightage factors
+  const weightages = {
+    results: 0.5,       // 50%
+    clientSentiment: 0.3, // 30%
+    communication: 0.2    // 20%
+  };
+
+  // Save data to localStorage whenever brands or nextId changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('pasBrands', JSON.stringify(brands));
+      localStorage.setItem('pasNextId', nextId.toString());
+    } catch (error) {
+      console.error("Error saving data:", error);
+    }
+  }, [brands, nextId]);
+
+  // Calculate overall score and condition for all brands
+  useEffect(() => {
+    const updatedBrands = brands.map(brand => {
+      const calculatedScore = 
+        (optionScores[brand.results] * weightages.results) + 
+        (optionScores[brand.clientSentiment] * weightages.clientSentiment) + 
+        (optionScores[brand.communication] * weightages.communication);
+      
+      const roundedScore = Math.round(calculatedScore);
+      
+      // Determine condition based on score
+      let condition;
+      if (calculatedScore < 25) {
+        condition = 'Poor';
+      } else if (calculatedScore < 50) {
+        condition = 'Fair';
+      } else if (calculatedScore < 75) {
+        condition = 'Good';
+      } else {
+        condition = 'Excellent';
+      }
+      
+      return {
+        ...brand,
+        score: roundedScore,
+        condition: condition
+      };
+    });
+    
+    setBrands(updatedBrands);
+  }, [brands.map(b => `${b.name}-${b.results}-${b.clientSentiment}-${b.communication}`).join()]);
+
+  // Update a factor for a specific brand
+  const updateBrandFactor = (id, factor, value) => {
+    setBrands(prevBrands => 
+      prevBrands.map(brand => 
+        brand.id === id ? { ...brand, [factor]: value } : brand
+      )
+    );
+  };
+
+  // Add a new brand
+  const addBrand = () => {
+    if (newBrandName.trim()) {
+      setBrands(prevBrands => [...prevBrands, {
+        id: nextId,
+        name: newBrandName,
+        results: 'Fair',
+        clientSentiment: 'Fair',
+        communication: 'Fair',
+        score: 0,
+        condition: ''
+      }]);
+      setNextId(prevId => prevId + 1);
+      setNewBrandName('');
+    }
+  };
+
+  // Export data as JSON
+  const exportData = () => {
+    const dataStr = JSON.stringify(brands, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pas_brands_export.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Import data from JSON file
+  const importData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedBrands = JSON.parse(e.target.result);
+        if (Array.isArray(importedBrands)) {
+          setBrands(importedBrands);
+          // Update nextId to be higher than any existing ID
+          const highestId = Math.max(...importedBrands.map(b => b.id), 0);
+          setNextId(highestId + 1);
+        }
+      } catch (error) {
+        alert('Error importing data. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset the input value so the same file can be imported again
+    event.target.value = '';
+  };
+
+  // Get appropriate color for condition
+  const getConditionColor = (condition) => {
+    switch (condition) {
+      case 'Poor': return 'text-red-600';
+      case 'Fair': return 'text-yellow-500';
+      case 'Good': return 'text-purple-500';
+      case 'Excellent': return 'text-purple-800';
+      default: return '';
+    }
+  };
+
+  return (
+    <div className="p-4 max-w-6xl mx-auto bg-gray-900 rounded-lg shadow-lg text-gray-100">
+      <h1 className="text-2xl font-bold mb-6 text-center text-purple-300">PAS Agency</h1>
+      
+      {/* Add new brand form */}
+      <div className="mb-6 flex gap-2">
+        <input
+          type="text"
+          value={newBrandName}
+          onChange={(e) => setNewBrandName(e.target.value)}
+          placeholder="Enter brand name"
+          className="flex-grow p-2 border rounded bg-gray-800 text-white border-gray-700"
+          onKeyDown={(e) => e.key === 'Enter' && addBrand()}
+        />
+        <button 
+          onClick={addBrand}
+          className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+        >
+          Add Brand
+        </button>
+      </div>
+      
+      {/* Import/Export buttons */}
+      <div className="mb-6 flex gap-2 justify-end">
+        <button 
+          onClick={exportData}
+          className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600"
+        >
+          Export Data
+        </button>
+        <label className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600 cursor-pointer">
+          Import Data
+          <input 
+            type="file" 
+            accept=".json" 
+            onChange={importData} 
+            className="hidden" 
+          />
+        </label>
+      </div>
+      
+      {/* Brands table */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse table-auto">
+          <thead>
+            <tr className="bg-gray-800">
+              <th className="p-2 text-left text-purple-300">Brand Name</th>
+              <th className="p-2 text-center text-purple-300">Results (50%)</th>
+              <th className="p-2 text-center text-purple-300">Client Sentiment (30%)</th>
+              <th className="p-2 text-center text-purple-300">Communication (20%)</th>
+              <th className="p-2 text-center text-purple-300">Overall Score</th>
+              <th className="p-2 text-center text-purple-300">Condition</th>
+            </tr>
+          </thead>
+          <tbody>
+            {brands.map((brand, index) => (
+              <tr key={brand.id} className="border-b border-gray-700 hover:bg-gray-800">
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={brand.name}
+                    onChange={(e) => updateBrandFactor(brand.id, 'name', e.target.value)}
+                    className="w-full p-1 border rounded bg-gray-800 text-white border-gray-700"
+                  />
+                </td>
+                <td className="p-2">
+                  <select
+                    value={brand.results}
+                    onChange={(e) => updateBrandFactor(brand.id, 'results', e.target.value)}
+                    className="w-full p-1 border rounded bg-gray-800 text-white border-gray-700"
+                  >
+                    {options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-2">
+                  <select
+                    value={brand.clientSentiment}
+                    onChange={(e) => updateBrandFactor(brand.id, 'clientSentiment', e.target.value)}
+                    className="w-full p-1 border rounded bg-gray-800 text-white border-gray-700"
+                  >
+                    {options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-2">
+                  <select
+                    value={brand.communication}
+                    onChange={(e) => updateBrandFactor(brand.id, 'communication', e.target.value)}
+                    className="w-full p-1 border rounded bg-gray-800 text-white border-gray-700"
+                  >
+                    {options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-2 text-center font-semibold">{brand.score}%</td>
+                <td className={`p-2 text-center font-bold ${getConditionColor(brand.condition)}`}>
+                  {brand.condition}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Legend */}
+      <div className="mt-6 p-3 bg-gray-800 rounded shadow border border-gray-700">
+        <h3 className="font-bold mb-2 text-purple-300">Condition Legend:</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-red-600 font-bold">Poor</span>
+            <span className="text-sm text-gray-300">(0-24%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-500 font-bold">Fair</span>
+            <span className="text-sm text-gray-300">(25-49%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-purple-500 font-bold">Good</span>
+            <span className="text-sm text-gray-300">(50-74%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-purple-800 font-bold">Excellent</span>
+            <span className="text-sm text-gray-300">(75-100%)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MultiBrandDashboard;
