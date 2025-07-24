@@ -16,6 +16,7 @@ const MultiBrandDashboard = () => {
     communication: 'Fair',
     score: 0,
     condition: ''
+    
   }));
 
   // Load saved data from localStorage if available
